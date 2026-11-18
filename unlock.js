@@ -26,12 +26,21 @@ function prepare(bundle){
 }
 function showPage(name){if(!pageUrls.has(name))return;$('#content').srcdoc=pageUrls.get(name);$('#gate').hidden=true;$('#viewer').hidden=false;}
 async function fetchBundle(config){
- if(encrypted)return encrypted;
- const response=await fetch(config.file);if(!response.ok)throw new Error('download');
- const reader=response.body?.getReader();if(!reader){encrypted=await response.arrayBuffer();return encrypted;}
+ if(encrypted?.iv===config.iv)return encrypted.bytes;
+ const url=new URL(config.file,location.href);
+ url.searchParams.set('v',config.iv);
+ const response=await fetch(url);if(!response.ok)throw new Error('download');
+ const reader=response.body?.getReader();
+ if(!reader){
+  const bytes=await response.arrayBuffer();
+  encrypted={iv:config.iv,bytes};
+  return bytes;
+ }
  const parts=[];let total=0;$('#progress').hidden=false;$('#progress').max=config.bytes;
  while(true){const {done,value}=await reader.read();if(done)break;parts.push(value);total+=value.length;$('#progress').value=total;status(`正在准备衣橱照片 · ${Math.min(100,Math.round(total/config.bytes*100))}%`);}
- const bytes=new Uint8Array(total);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}encrypted=bytes.buffer;return encrypted;
+ const bytes=new Uint8Array(total);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length;}
+ encrypted={iv:config.iv,bytes:bytes.buffer};
+ return encrypted.bytes;
 }
 async function open(key,config){
  const bytes=await fetchBundle(config);status('正在解锁照片…');
